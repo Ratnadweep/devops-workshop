@@ -73,7 +73,7 @@ resource "aws_subnet" "dpp-public-subnet-01" {
   map_public_ip_on_launch = "true"
   availability_zone       = "us-east-1a"
   tags = {
-    Name = "dpp-public-subent-01"
+    Name = "dpp-public-subnet-01"
   }
 }
 
@@ -83,7 +83,7 @@ resource "aws_subnet" "dpp-public-subnet-02" {
   map_public_ip_on_launch = "true"
   availability_zone       = "us-east-1b"
   tags = {
-    Name = "dpp-public-subent-02"
+    Name = "dpp-public-subnet-02"
   }
 }
 
