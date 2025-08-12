@@ -2,8 +2,17 @@ provider "aws" {
   region = "us-east-1"
 }
 
+data "aws_ami" "ubuntu" {
+  most_recent = true
+  owners = [ "099720109477" ]
+  filter {
+    name = "name"
+    values = [ "ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*" ]
+  }
+}
+
 resource "aws_instance" "demo-server" {
-    ami = "ami-053b0d53c279acc90"
+    ami = data.aws_ami.ubuntu.image_id
     instance_type = "t2.micro"
     key_name = "dpp"
     //security_groups = [ "demo-sg" ]
