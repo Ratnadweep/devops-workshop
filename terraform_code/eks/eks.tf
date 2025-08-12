@@ -118,7 +118,7 @@ resource "aws_iam_instance_profile" "worker" {
 
 ###############################################################################################################
 resource "aws_eks_cluster" "eks" {
-  name = "valaxy-eks-01"
+  name = "rgcompany-eks-01"
   role_arn = aws_iam_role.master.arn
 
   vpc_config {

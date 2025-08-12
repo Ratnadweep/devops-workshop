@@ -25,5 +25,5 @@
 1. Download Kubernetes credentials and cluster configuration (.kube/config file) from the cluster  
 
    ```sh 
-    aws eks update-kubeconfig --region us-east-1 --name valaxy-eks-01
+    aws eks update-kubeconfig --region us-east-1 --name rgcompany-eks-01
    ```
