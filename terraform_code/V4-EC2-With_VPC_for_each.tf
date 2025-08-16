@@ -46,7 +46,7 @@ resource "aws_security_group" "demo-sg" {
   }
 
   ingress {
-    //description = "Container port"
+    description = "Container port"
     from_port   = 8000
     to_port     = 8000
     protocol    = "tcp"
