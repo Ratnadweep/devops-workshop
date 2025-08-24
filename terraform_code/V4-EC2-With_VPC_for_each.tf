@@ -12,18 +12,25 @@ data "aws_ami" "ubuntu" {
 }
 
 resource "aws_instance" "demo-server" {
+  for_each               = toset(["jenkins-master", "build-slave", "ansible"])
   ami           = data.aws_ami.ubuntu.image_id
   instance_type = "t2.micro"
   key_name      = "dpp"
   //security_groups = [ "demo-sg" ]
   vpc_security_group_ids = [aws_security_group.demo-sg.id]
   subnet_id              = aws_subnet.dpp-public-subnet-01.id
-  iam_instance_profile = aws_iam_instance_profile.jenkins_profile.name
-  for_each               = toset(["jenkins-master", "build-slave", "ansible"])
+
+  # Attach IAM role depending on the instance
+  iam_instance_profile = (
+  each.key == "jenkins-master" ? aws_iam_instance_profile.jenkins_profile.name :
+  each.key == "ansible"        ? aws_iam_instance_profile.ansible_profile.name :
+                                  null
+  )
+
 
 # cloud-init user data (only for ansible node)
   user_data = each.key == "ansible" ? file("${path.module}/ansible.sh") : null
-  
+
   tags = {
     Name = "${each.key}"
   }
@@ -194,6 +201,56 @@ resource "aws_iam_instance_profile" "jenkins_profile" {
 }
 
 # Attach to EC2 in Line- 21
+
+# Custom IAM role for Ansible EC2 to manage dynamic inventory file
+resource "aws_iam_role" "ansible_role" {
+  name = "ansible-ec2-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+# IAM Policy for Ansible EC2 (Describe permissions only)
+resource "aws_iam_policy" "ansible_policy" {
+  name        = "ansible-ec2-policy"
+  description = "Allow Ansible EC2 to describe instances and tags"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = [
+          "ec2:DescribeInstances",
+          "ec2:DescribeTags"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+# Attach the Policy to the Role
+resource "aws_iam_role_policy_attachment" "ansible_attach" {
+  role       = aws_iam_role.ansible_role.name
+  policy_arn = aws_iam_policy.ansible_policy.arn
+}
+
+# IAM Instance Profile (EC2 requires this wrapper to use the role)
+resource "aws_iam_instance_profile" "ansible_profile" {
+  name = "ansible-ec2-instance-profile"
+  role = aws_iam_role.ansible_role.name
+}
 
 
 // output block
