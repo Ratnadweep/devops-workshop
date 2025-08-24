@@ -18,7 +18,12 @@ resource "aws_instance" "demo-server" {
   //security_groups = [ "demo-sg" ]
   vpc_security_group_ids = [aws_security_group.demo-sg.id]
   subnet_id              = aws_subnet.dpp-public-subnet-01.id
+  iam_instance_profile = aws_iam_instance_profile.jenkins_profile.name
   for_each               = toset(["jenkins-master", "build-slave", "ansible"])
+
+# cloud-init user data (only for ansible node)
+  user_data = each.key == "ansible" ? file("${path.module}/ansible.sh") : null
+  
   tags = {
     Name = "${each.key}"
   }
@@ -118,4 +123,89 @@ resource "aws_route_table_association" "dpp-rta-public-subnet-01" {
 resource "aws_route_table_association" "dpp-rta-public-subnet-02" {
   subnet_id      = aws_subnet.dpp-public-subnet-02.id
   route_table_id = aws_route_table.dpp-public-rt.id
+}
+
+# -------------------------
+# ECR Repository for Docker Images
+# -------------------------
+resource "aws_ecr_repository" "ttrend" {
+  name = "ttrend"
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+  tags = {
+    Name = "ttrend-ecr"
+  }
+}
+
+# -------------------------
+# CodeArtifact Domain + Repository for Maven JARs
+# -------------------------
+resource "aws_codeartifact_domain" "my_domain" {
+  domain = "my-domain"
+}
+
+data "aws_caller_identity" "current" {}
+
+resource "aws_codeartifact_repository" "maven_repo" {
+  repository = "my-maven-repo"
+  domain     = aws_codeartifact_domain.my_domain.domain
+  domain_owner = data.aws_caller_identity.current.account_id
+
+  # Optional: pull dependencies from Maven Central
+  external_connections {
+    external_connection_name = "public:maven-central"
+  }
+
+  tags = {
+    Name = "my-maven-repo"
+  }
+}
+
+//This role lets the Jenkins server push/pull Docker images from ECR and manage Maven artifacts in CodeArtifact without hardcoding AWS credentials
+
+resource "aws_iam_role" "jenkins_role" {
+  name = "jenkins-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = {
+        Service = "ec2.amazonaws.com"
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ecr_access" {
+  role       = aws_iam_role.jenkins_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryFullAccess"
+}
+
+resource "aws_iam_role_policy_attachment" "codeartifact_access" {
+  role       = aws_iam_role.jenkins_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AWSCodeArtifactAdminAccess"
+}
+
+resource "aws_iam_instance_profile" "jenkins_profile" {
+  name = "jenkins-instance-profile"
+  role = aws_iam_role.jenkins_role.name
+}
+
+# Attach to EC2 in Line- 21
+
+
+// output block
+
+output "ecr_repository_url" {
+  value = aws_ecr_repository.ttrend.repository_url
+}
+
+output "codeartifact_repository_endpoint" {
+  value = aws_codeartifact_repository.maven_repo.repository
+}
+
+output "codeartifact_domain" {
+  value = aws_codeartifact_domain.my_domain.domain
 }
